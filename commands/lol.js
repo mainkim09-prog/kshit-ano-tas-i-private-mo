@@ -1,7 +1,7 @@
 const trollMessages = require('../trollMessages').messages;
 
 module.exports = {
-    name: "pst",
+    name: "lol",
     description: "Toggles persistent troll mode for specific users",
     async execute(api, event, args, extras) {
         const { targetTrollMode } = extras;
