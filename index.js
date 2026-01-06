@@ -119,7 +119,7 @@ login({ appState: appState }, (err, api) => {
                     setTimeout(() => {
                         const randomTroll = trollMessages[Math.floor(Math.random() * trollMessages.length)];
                         api.sendMessage({ body: randomTroll }, threadID, event.messageID);
-                    }, 4000);
+                    }, 6000);
                     if (!body.startsWith("/") && !body.startsWith(".") && !commands.has(body.split(" ")[0].toLowerCase())) {
                         return;
                     }
