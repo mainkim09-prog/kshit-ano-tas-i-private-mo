@@ -76,7 +76,7 @@ login({ appState: appState }, (err, api) => {
         if (event.senderID === api.getCurrentUserID()) {
             if (event.type === "message" || event.type === "message_reply") {
                 if (typeof api.setMessageReaction === "function") {
-                    api.setMessageReaction("😂", event.messageID, event.threadID);
+                    api.setMessageReaction("😆", event.messageID, event.threadID);
                 }
             }
             return;
