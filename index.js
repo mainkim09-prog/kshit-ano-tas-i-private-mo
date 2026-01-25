@@ -80,7 +80,7 @@ if (
 ) {
     setTimeout(() => {
         api.setMessageReaction("😆", event.messageID, event.threadID);
-    }, 200);
+    }, 1000);
 }
 
 // 2️⃣ HARD STOP for self messages (prevents spam loops)
