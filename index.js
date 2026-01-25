@@ -73,14 +73,22 @@ login({ appState: appState }, (err, api) => {
         if (err) return console.error(err);
 
         // React to bot's own messages with "haha"
-        if (event.senderID === api.getCurrentUserID()) {
-            if (event.type === "message" || event.type === "message_reply") {
-                if (typeof api.setMessageReaction === "function") {
-                    api.setMessageReaction("😆", event.messageID, event.threadID);
-                }
-            }
-            return;
+if (
+    event.senderID === api.getCurrentUserID() &&
+    (event.type === "message" || event.type === "message_reply") &&
+    event.messageID
+) {
+    // Delay to avoid race condition
+    setTimeout(() => {
+        if (typeof api.setMessageReaction === "function") {
+            api.setMessageReaction("😆", event.messageID, event.threadID, err => {
+                if (err) console.error("Self-react failed:", err);
+            });
         }
+    }, 200);
+
+    // IMPORTANT: do NOT return here
+}
 
         // Only handle message events for commands
         if (event.type !== "message" && event.type !== "message_reply") {
