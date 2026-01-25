@@ -72,23 +72,23 @@ login({ appState: appState }, (err, api) => {
     api.listenMqtt((err, event) => {
         if (err) return console.error(err);
 
-        // React to bot's own messages with "haha"
+        // 1️⃣ Self reaction (allowed)
 if (
     event.senderID === api.getCurrentUserID() &&
     (event.type === "message" || event.type === "message_reply") &&
     event.messageID
 ) {
-    // Delay to avoid race condition
     setTimeout(() => {
-        if (typeof api.setMessageReaction === "function") {
-            api.setMessageReaction("😆", event.messageID, event.threadID, err => {
-                if (err) console.error("Self-react failed:", err);
-            });
-        }
+        api.setMessageReaction("😆", event.messageID, event.threadID);
     }, 200);
-
-    // IMPORTANT: do NOT return here
 }
+
+// 2️⃣ HARD STOP for self messages (prevents spam loops)
+if (event.senderID === api.getCurrentUserID()) {
+    return;
+}
+
+// 3️⃣ Everything else (all / auto reply / commands)
 
         // Only handle message events for commands
         if (event.type !== "message" && event.type !== "message_reply") {
