@@ -37,7 +37,7 @@ let appState;
 try {
     appState = JSON.parse(fs.readFileSync("appstate.json", "utf8"));
 } catch (err) {
-    console.error("Error reading appstate.json. Provide a valid appstate.");
+    console.error("Error reading appstate.json.");
     process.exit(1);
 }
 
@@ -74,41 +74,39 @@ login({ appState }, (err, api) => {
     });
 
     // ==============================
-    // ✅ GLOBAL AUTO SELF-REACTION FIX
+    // ✅ SAFE AUTO SELF-REACTION
     // ==============================
     const originalSendMessage = api.sendMessage.bind(api);
 
     api.sendMessage = function (message, threadID, callback, replyTo) {
         return originalSendMessage(message, threadID, (err, info) => {
-            if (!err && info && info.messageID) {
+            if (!err && info?.messageID) {
                 setTimeout(() => {
                     api.setMessageReaction("😆", info.messageID, threadID);
                 }, 200);
             }
-            if (typeof callback === "function") {
-                callback(err, info);
-            }
+            if (typeof callback === "function") callback(err, info);
         }, replyTo);
     };
 
     api.listenMqtt((err, event) => {
         if (err) return console.error(err);
 
-        // Ignore bot's own messages here (reaction handled after send)
+        // Ignore self messages (reaction handled post-send)
         if (event.senderID === api.getCurrentUserID()) return;
 
+        // ⚠️ IMPORTANT: NO RETURN HERE (restores auto-reply logic)
         if (event.type !== "message" && event.type !== "message_reply") {
             if (event.type === "message_unsend") {
-                // optional unsend logic
+                // unsend trolling logic (if any)
             }
-            return;
         }
 
         const threadID = event.threadID;
         const senderID = event.senderID;
         const body = (event.body || "").trim();
 
-        // Clear "hey" timers
+        // Clear hey timers
         if (body) {
             const timerKey = `${threadID}_${senderID}`;
             if (global.heyTimers.has(timerKey)) {
@@ -131,7 +129,7 @@ login({ appState }, (err, api) => {
                 lastMessageTime.set(targetKey, now);
 
                 const isBump = body === "." || body.toLowerCase().includes("bump");
-                const hasAttachment = event.attachments && event.attachments.length > 0;
+                const hasAttachment = event.attachments?.length > 0;
 
                 if (hasAttachment || isBump || body) {
                     setTimeout(() => {
@@ -160,24 +158,10 @@ login({ appState }, (err, api) => {
 
         if (commands.has(commandName)) {
             if (!admins.includes(senderID)) return;
-
-            try {
-                commands
-                    .get(commandName)
-                    .execute(api, event, args, { trollMode, targetTrollMode });
-            } catch (err) {
-                console.error(`Error executing ${commandName}:`, err);
-            }
+            commands.get(commandName).execute(api, event, args, { trollMode, targetTrollMode });
         } else if (commands.has(firstWord)) {
             if (!admins.includes(senderID)) return;
-
-            try {
-                commands
-                    .get(firstWord)
-                    .execute(api, event, args, { trollMode, targetTrollMode });
-            } catch (err) {
-                console.error(`Error executing ${firstWord}:`, err);
-            }
+            commands.get(firstWord).execute(api, event, args, { trollMode, targetTrollMode });
         }
     });
 });
