@@ -32,73 +32,62 @@ app.listen(port, "0.0.0.0", () => {
     console.log(`Uptime server running on port ${port}`);
 });
 
-// Load appstate
+// Check if appstate.json exists and has content
 let appState;
 try {
-    appState = JSON.parse(fs.readFileSync("appstate.json", "utf8"));
+    appState = JSON.parse(fs.readFileSync('appstate.json', 'utf8'));
 } catch (err) {
-    console.error("Error reading appstate.json.");
+    console.error("Error reading appstate.json or file is empty. Please provide a valid appstate.");
     process.exit(1);
 }
 
-// Load config and commands
-const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
+// Load commands
+const config = JSON.parse(fs.readFileSync('config.json', 'utf8'));
 const admins = config.admins || [];
 const commands = new Map();
-
-const trollMode = new Map();
-const targetTrollMode = new Map();
-const lastMessageTime = new Map();
-global.heyTimers = new Map();
-
-const trollMessages = require("./trollMessages").messages;
-const commandFiles = fs
-    .readdirSync(path.join(__dirname, "commands"))
-    .filter(file => file.endsWith(".js"));
+const trollMode = new Map(); // Stores threadID -> casterID mapping
+const targetTrollMode = new Map(); // Stores threadID_userID mappings for specific target trolls
+const lastMessageTime = new Map(); // To prevent spamming
+global.heyTimers = new Map(); // Store timers for the 'hey' command
+const trollMessages = require('./trollMessages').messages;
+const commandFiles = fs.readdirSync(path.join(__dirname, 'commands')).filter(file => file.endsWith('.js'));
 
 for (const file of commandFiles) {
     const command = require(`./commands/${file}`);
     commands.set(command.name, command);
 }
 
-login({ appState }, (err, api) => {
+login({ appState: appState }, (err, api) => {
     if (err) return console.error(err);
 
     console.log("Logged in successfully!");
 
-    api.setOptions({
+    api.setOptions({ 
         listenEvents: true,
         selfListen: true,
         online: true,
         forceLogin: true
     });
 
-    // ==============================
-    // ✅ SAFE AUTO SELF-REACTION
-    // ==============================
-    const originalSendMessage = api.sendMessage.bind(api);
-
-    api.sendMessage = function (message, threadID, callback, replyTo) {
-        return originalSendMessage(message, threadID, (err, info) => {
-            if (!err && info?.messageID) {
-                setTimeout(() => {
-                    api.setMessageReaction("😆", info.messageID, threadID);
-                }, 200);
-            }
-            if (typeof callback === "function") callback(err, info);
-        }, replyTo);
-    };
-
     api.listenMqtt((err, event) => {
         if (err) return console.error(err);
 
-        // Ignore self messages (reaction handled post-send)
-        if (event.senderID === api.getCurrentUserID()) return;
+        // React to bot's own messages with "haha"
+        if (event.senderID === api.getCurrentUserID()) {
+            if (event.type === "message" || event.type === "message_reply") {
+                if (typeof api.setMessageReaction === "function") {
+                    api.setMessageReaction("😆", event.messageID, event.threadID);
+                }
+            }
+            return;
+        }
 
-        // ⚠️ IMPORTANT: NO RETURN HERE (restores auto-reply logic)
+        // Only handle message events for commands
         if (event.type !== "message" && event.type !== "message_reply") {
+            // Handle "hey" timers and trolling for non-message events if needed, 
+            // but commands need a body.
             if (event.type === "message_unsend") {
-                // unsend trolling logic (if any)
+                // handle unsend trolling if applicable
             }
         }
 
@@ -106,8 +95,8 @@ login({ appState }, (err, api) => {
         const senderID = event.senderID;
         const body = (event.body || "").trim();
 
-        // Clear hey timers
-        if (body) {
+        // Clear "hey" timers if person replies
+        if (body && global.heyTimers) {
             const timerKey = `${threadID}_${senderID}`;
             if (global.heyTimers.has(timerKey)) {
                 clearTimeout(global.heyTimers.get(timerKey));
@@ -117,32 +106,21 @@ login({ appState }, (err, api) => {
 
         const targetKey = `${threadID}_${senderID}`;
         const casterID = trollMode.get(threadID);
-        const isTargeted =
-            (trollMode.has(threadID) && senderID !== casterID) ||
-            targetTrollMode.has(targetKey);
+        const isTargeted = (trollMode.has(threadID) && senderID !== casterID) || targetTrollMode.has(targetKey);
 
         if (isTargeted) {
             const now = Date.now();
             const lastTime = lastMessageTime.get(targetKey) || 0;
-
             if (now - lastTime >= 4000) {
                 lastMessageTime.set(targetKey, now);
-
                 const isBump = body === "." || body.toLowerCase().includes("bump");
-                const hasAttachment = event.attachments?.length > 0;
-
+                const hasAttachment = event.attachments && event.attachments.length > 0;
                 if (hasAttachment || isBump || body) {
                     setTimeout(() => {
-                        const randomTroll =
-                            trollMessages[Math.floor(Math.random() * trollMessages.length)];
+                        const randomTroll = trollMessages[Math.floor(Math.random() * trollMessages.length)];
                         api.sendMessage({ body: randomTroll }, threadID, event.messageID);
                     }, 4000);
-
-                    if (
-                        !body.startsWith("/") &&
-                        !body.startsWith(".") &&
-                        !commands.has(body.split(" ")[0].toLowerCase())
-                    ) {
+                    if (!body.startsWith("/") && !body.startsWith(".") && !commands.has(body.split(" ")[0].toLowerCase())) {
                         return;
                     }
                 }
@@ -157,11 +135,25 @@ login({ appState }, (err, api) => {
         const commandName = hasPrefix ? firstWord.slice(1) : firstWord;
 
         if (commands.has(commandName)) {
-            if (!admins.includes(senderID)) return;
-            commands.get(commandName).execute(api, event, args, { trollMode, targetTrollMode });
+            if (!admins.includes(senderID)) {
+                return;
+            }
+            console.log(`Executing command: ${commandName}`);
+            try {
+                commands.get(commandName).execute(api, event, args, { trollMode, targetTrollMode });
+            } catch (err) {
+                console.error(`Error executing ${commandName}:`, err);
+            }
         } else if (commands.has(firstWord)) {
-            if (!admins.includes(senderID)) return;
-            commands.get(firstWord).execute(api, event, args, { trollMode, targetTrollMode });
+            if (!admins.includes(senderID)) {
+                return;
+            }
+            console.log(`Executing prefixless command: ${firstWord}`);
+            try {
+                commands.get(firstWord).execute(api, event, args, { trollMode, targetTrollMode });
+            } catch (err) {
+                console.error(`Error executing prefixless ${firstWord}:`, err);
+            }
         }
     });
 });
