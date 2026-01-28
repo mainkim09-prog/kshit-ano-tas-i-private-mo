@@ -10,10 +10,10 @@ module.exports = {
 
         if (trollMode.has(threadID)) {
             trollMode.delete(threadID);
-            api.sendMessage("bouncr na me", threadID);
+            api.sendMessage("🤦🤦", threadID);
         } else {
             trollMode.set(threadID, senderID);
-            api.sendMessage("palag mga engot", threadID);
+            api.sendMessage("😈", threadID);
         }
     }
 };
