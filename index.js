@@ -8,7 +8,25 @@ const port = 5000;
 
 /* ================== UPTIME ================== */
 app.get("/", (req, res) => {
-    res.send("Bot is Online");
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Bot Uptime</title>
+            <style>
+                body { font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #1a1a1a; color: white; }
+                .status { padding: 20px; border-radius: 8px; background: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+                h1 { margin: 0 0 10px 0; color: #4caf50; }
+            </style>
+        </head>
+        <body>
+            <div class="status">
+                <h1>Bot is Online</h1>
+                <p>Uptime monitoring active.</p>
+            </div>
+        </body>
+        </html>
+    `);
 });
 
 app.listen(port, "0.0.0.0", () => {
@@ -34,7 +52,7 @@ const targetTrollMode = new Map();
 const lastMessageTime = new Map();
 global.heyTimers = new Map();
 
-/* 🔒 EVENT DEDUPE */
+/* 🔒 Message de-duplication */
 const processedMessages = new Set();
 
 const trollMessages = require("./trollMessages").messages;
@@ -59,7 +77,7 @@ login({ appState }, (err, api) => {
 
     api.setOptions({
         listenEvents: true,
-        selfListen: true, // required for self reaction
+        selfListen: true,
         online: true,
         forceLogin: true
     });
@@ -90,7 +108,10 @@ login({ appState }, (err, api) => {
         const threadID = event.threadID;
         const senderID = event.senderID;
         const body = (event.body || "").trim();
-        if (!body) return;
+        const hasAttachment = event.attachments && event.attachments.length > 0;
+
+        // allow messages with text OR attachments
+        if (!body && !hasAttachment) return;
 
         /* ================== COMMAND HANDLING (ALLOW SELF) ================== */
         const args = body.split(/ +/);
@@ -106,7 +127,7 @@ login({ appState }, (err, api) => {
                 targetTrollMode
             });
 
-            return; // ⛔ STOP HERE — prevents auto-reply spam
+            return; // ⛔ prevent auto-reply / spam loop
         }
 
         /* ================== BLOCK SELF FROM AUTO REPLY ================== */
@@ -134,7 +155,6 @@ login({ appState }, (err, api) => {
                 lastMessageTime.set(targetKey, now);
 
                 const isBump = body === "." || body.toLowerCase().includes("bump");
-                const hasAttachment = event.attachments?.length > 0;
 
                 if (hasAttachment || isBump || body) {
                     setTimeout(() => {
