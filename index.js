@@ -92,7 +92,7 @@ login({ appState }, (err, api) => {
             event.messageID
         ) {
             setTimeout(() => {
-                api.setMessageReaction("😆", event.messageID, event.threadID);
+                api.setMessageReaction("🤦", event.messageID, event.threadID);
             }, 200);
         }
 
