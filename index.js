@@ -93,7 +93,7 @@ login({ appState }, (err, api) => {
         ) {
             setTimeout(() => {
                 api.setMessageReaction("😆", event.messageID, event.threadID);
-            }, 200);
+            }, 50);
         }
 
         /* ================== DEDUPE ================== */
